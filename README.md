@@ -131,9 +131,6 @@ Microsoft Office 2007 SP3, Microsoft Office 2010 SP2, Microsoft Office 2013 SP1 
 
 Связанная малварь: Loki, FormBook, Pony/FAREIT
 
-
-> Используемые материалы: [Top 10 Most Exploited Vulnerabilities 2016–2019](https://us-cert.cisa.gov/ncas/alerts/aa20-133a), [FBI and DHS Share List of Top 10 Most Exploited Vulnerabilities](https://cybersecuritynews.com/10-most-exploited-vulnerabilities/),
-
 ![](02.png)
 
 Уязвимые продукты: Microsoft Office 2007 SP3, 2010 SP2, 2013 SP1, 2016, Vista SP2, Server 2008 SP2, Windows 7 SP1, Windows 8.1
@@ -206,3 +203,4 @@ Drupal до 7.58, 8.x до 8.3.9, 8.4.x до 8.4.6 и 8.5.x до 8.5.1 позв�
 
 Связанная малварь: Kitty
 
+> Используемые материалы: [Top 10 Most Exploited Vulnerabilities 2016–2019](https://us-cert.cisa.gov/ncas/alerts/aa20-133a), [FBI and DHS Share List of Top 10 Most Exploited Vulnerabilities](https://cybersecuritynews.com/10-most-exploited-vulnerabilities/)
