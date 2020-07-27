@@ -119,6 +119,8 @@
 |     4-6     |    P2     |   Максимум 4 недели  |
 |     7-10    |    P1     |   Максимум 2 недели  |
 
+Оценивание уязвимости происходит с помощью [Common Vulnerability Scoring System Version 3.0 Calculator](https://www.first.org/cvss/calculator/3.0)
+
 > Используемые материалы: [Common Vulnerability Scoring System](https://www.first.org/cvss/specification-document), [Patching Policy](https://www.first.org/cvss/v2/cvss-based-patch-policy.pdf)
 
 # Задание 2.
